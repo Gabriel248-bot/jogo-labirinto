@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Labirinto Game</title>
+<h3 class="dev">DEV: Gabriel_Viana</h3>
+<style>
+body {
+    margin: 0;
+    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+    font-family: Arial, sans-serif;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+h1 {
+    margin-top: 15px;
+}
+
+#menu {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+button, select {
+    padding: 8px 14px;
+    font-size: 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+}
+
+button {
+    background: #00c853;
+    color: white;
+}
+
+button:hover {
+    background: #00e676;
+}
+
+canvas {
+    background: black;
+    max-width: 95vw;
+    max-height: 65vh;
+    border-radius: 10px;
+    box-shadow: 0 0 20px #00ff99;
+}
+
+#controls {
+    margin-top: 15px;
+    display: grid;
+    grid-template-columns: 70px 70px 70px;
+    grid-template-rows: 70px 70px;
+    gap: 5px;
+}
+
+.controlBtn {
+    font-size: 22px;
+    background: #222;
+    border: 2px solid #00ff99;
+    color: white;
+    border-radius: 10px;
+}
+
+#timer {
+    font-weight: bold;
+}
+
+#message {
+    margin-top: 10px;
+    font-size: 18px;
+    color: #00ff99;
+}
+
+.dev {
+    text-align: center;
+    color: #00a86b;
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
+    letter-spacing: 1px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🧩 Labirinto</h1>
+
+<div id="menu">
+    <select id="difficulty">
+        <option value="15">Fácil</option>
+        <option value="25" selected>Médio</option>
+        <option value="40">Difícil</option>
+    </select>
+
+    <button onclick="prepareGame()">🎮 Iniciar Jogo</button>
+    <button onclick="prepareGame()">🔁 Jogar Novamente</button>
+
+    <span>⏱ Tempo: <span id="timer">0.0</span>s</span>
+</div>
+
+<canvas id="maze"></canvas>
+
+<div id="controls">
+    <div></div>
+    <button class="controlBtn" onclick="move('up')">⬆️</button>
+    <div></div>
+    <button class="controlBtn" onclick="move('left')">⬅️</button>
+    <button class="controlBtn" onclick="move('down')">⬇️</button>
+    <button class="controlBtn" onclick="move('right')">➡️</button>
+</div>
+
+<div id="message"></div>
+
+<script>
+let canvas = document.getElementById("maze");
+let ctx = canvas.getContext("2d");
+
+let cols, rows, size;
+let grid, stack, current;
+let player, exit;
+let pathTrail;
+let startTime;
+let timerInterval;
+let gameActive = false;
+
+class Cell {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.walls = [true, true, true, true];
+        this.visited = false;
+    }
+
+    draw() {
+        const x = this.x * size;
+        const y = this.y * size;
+
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+
+        if (this.walls[0]) line(x,y,x+size,y);
+        if (this.walls[1]) line(x+size,y,x+size,y+size);
+        if (this.walls[2]) line(x+size,y+size,x,y+size);
+        if (this.walls[3]) line(x,y+size,x,y);
+    }
+}
+
+function line(x1,y1,x2,y2){
+    ctx.beginPath();
+    ctx.moveTo(x1,y1);
+    ctx.lineTo(x2,y2);
+    ctx.stroke();
+}
+
+function index(x,y){
+    if(x<0||y<0||x>=cols||y>=rows) return -1;
+    return x + y*cols;
+}
+
+function prepareGame(){
+    clearInterval(timerInterval);
+    document.getElementById("timer").textContent = "0.0";
+    document.getElementById("message").textContent = "";
+    gameActive = false;
+
+    cols = rows = parseInt(document.getElementById("difficulty").value);
+
+    size = Math.floor(Math.min(window.innerWidth*0.9, window.innerHeight*0.6)/cols);
+
+    canvas.width = cols*size;
+    canvas.height = rows*size;
+
+    grid = [];
+    for(let y=0;y<rows;y++){
+        for(let x=0;x<cols;x++){
+            grid.push(new Cell(x,y));
+        }
+    }
+
+    stack = [];
+    current = grid[0];
+    current.visited = true;
+
+    generateMaze();
+}
+
+function generateMaze(){
+    let next = getNeighbor(current);
+    if(next){
+        next.visited = true;
+        stack.push(current);
+        removeWalls(current,next);
+        current = next;
+    } else if(stack.length>0){
+        current = stack.pop();
+    } else{
+        startGame();
+        return;
+    }
+    requestAnimationFrame(generateMaze);
+}
+
+function getNeighbor(cell){
+    let neighbors=[];
+    let t=grid[index(cell.x,cell.y-1)];
+    let r=grid[index(cell.x+1,cell.y)];
+    let b=grid[index(cell.x,cell.y+1)];
+    let l=grid[index(cell.x-1,cell.y)];
+
+    if(t&&!t.visited)neighbors.push(t);
+    if(r&&!r.visited)neighbors.push(r);
+    if(b&&!b.visited)neighbors.push(b);
+    if(l&&!l.visited)neighbors.push(l);
+
+    if(neighbors.length>0)
+        return neighbors[Math.floor(Math.random()*neighbors.length)];
+}
+
+function removeWalls(a,b){
+    let dx=a.x-b.x;
+    let dy=a.y-b.y;
+
+    if(dx===1){a.walls[3]=false;b.walls[1]=false;}
+    if(dx===-1){a.walls[1]=false;b.walls[3]=false;}
+    if(dy===1){a.walls[0]=false;b.walls[2]=false;}
+    if(dy===-1){a.walls[2]=false;b.walls[0]=false;}
+}
+
+function startGame(){
+    player = grid[0];
+
+    do{
+        exit = grid[Math.floor(Math.random()*grid.length)];
+    }while(exit === player);
+
+    pathTrail = new Set();
+    pathTrail.add(index(player.x,player.y));
+
+    startTime = Date.now();
+    timerInterval = setInterval(()=>{
+        let t=((Date.now()-startTime)/1000).toFixed(1);
+        document.getElementById("timer").textContent = t;
+    },100);
+
+    gameActive = true;
+    draw();
+}
+
+function move(dir){
+    if(!gameActive) return;
+
+    let moved=false;
+
+    if(dir==="up"&&!player.walls[0]){player=grid[index(player.x,player.y-1)];moved=true;}
+    if(dir==="right"&&!player.walls[1]){player=grid[index(player.x+1,player.y)];moved=true;}
+    if(dir==="down"&&!player.walls[2]){player=grid[index(player.x,player.y+1)];moved=true;}
+    if(dir==="left"&&!player.walls[3]){player=grid[index(player.x-1,player.y)];moved=true;}
+
+    if(moved){
+        pathTrail.add(index(player.x,player.y));
+        draw();
+
+        if(player===exit){
+            gameActive=false;
+            clearInterval(timerInterval);
+            let finalTime=((Date.now()-startTime)/1000).toFixed(1);
+            document.getElementById("message").textContent =
+                "🏆 Você venceu em "+finalTime+" segundos!";
+        }
+    }
+}
+
+document.addEventListener("keydown",e=>{
+    if(e.key==="ArrowUp")move("up");
+    if(e.key==="ArrowRight")move("right");
+    if(e.key==="ArrowDown")move("down");
+    if(e.key==="ArrowLeft")move("left");
+});
+
+function draw(){
+    ctx.fillStyle="black";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    grid.forEach(c=>c.draw());
+
+    ctx.fillStyle="rgba(0,0,255,0.3)";
+    pathTrail.forEach(i=>{
+        let c=grid[i];
+        ctx.fillRect(c.x*size,c.y*size,size,size);
+    });
+
+    ctx.fillStyle="green";
+    ctx.fillRect(exit.x*size+size/4,exit.y*size+size/4,size/2,size/2);
+
+    ctx.beginPath();
+    ctx.arc(player.x*size+size/2,player.y*size+size/2,size/4,0,Math.PI*2);
+    ctx.fillStyle="red";
+    ctx.fill();
+}
+</script>
+
+</body>
+</html>
