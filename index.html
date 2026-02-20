@@ -2,9 +2,10 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Labirinto Game</title>
 <h3 class="dev">DEV: Gabriel_Viana</h3>
+    
 <style>
 body {
     margin: 0;
@@ -14,6 +15,7 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    touch-action: none;
 }
 
 h1 {
@@ -87,6 +89,12 @@ canvas {
     font-size: 18px;
     letter-spacing: 1px;
 }
+
+.controlBtn:active {
+    background: #00ff99;
+    color: black;
+    transform: scale(0.95);
+}
 </style>
 </head>
 
@@ -111,11 +119,11 @@ canvas {
 
 <div id="controls">
     <div></div>
-    <button class="controlBtn" onclick="move('up')">⬆️</button>
+    <button class="controlBtn" data-dir="up">⬆️</button>
     <div></div>
-    <button class="controlBtn" onclick="move('left')">⬅️</button>
-    <button class="controlBtn" onclick="move('down')">⬇️</button>
-    <button class="controlBtn" onclick="move('right')">➡️</button>
+    <button class="controlBtn" data-dir="left">⬅️</button>
+    <button class="controlBtn" data-dir="down">⬇️</button>
+    <button class="controlBtn" data-dir="right">➡️</button>
 </div>
 
 <div id="message"></div>
@@ -255,29 +263,36 @@ function startGame(){
     draw();
 }
 
-function move(dir){
-    if(!gameActive) return;
+let moveInterval = null;
 
-    let moved=false;
+function startMove(dir){
+    move(dir); // movimento imediato
 
-    if(dir==="up"&&!player.walls[0]){player=grid[index(player.x,player.y-1)];moved=true;}
-    if(dir==="right"&&!player.walls[1]){player=grid[index(player.x+1,player.y)];moved=true;}
-    if(dir==="down"&&!player.walls[2]){player=grid[index(player.x,player.y+1)];moved=true;}
-    if(dir==="left"&&!player.walls[3]){player=grid[index(player.x-1,player.y)];moved=true;}
-
-    if(moved){
-        pathTrail.add(index(player.x,player.y));
-        draw();
-
-        if(player===exit){
-            gameActive=false;
-            clearInterval(timerInterval);
-            let finalTime=((Date.now()-startTime)/1000).toFixed(1);
-            document.getElementById("message").textContent =
-                "🏆 Você venceu em "+finalTime+" segundos!";
-        }
-    }
+    moveInterval = setInterval(()=>{
+        move(dir);
+    },150); // velocidade de repetição
 }
+
+function stopMove(){
+    clearInterval(moveInterval);
+}
+
+document.querySelectorAll(".controlBtn").forEach(btn => {
+    const dir = btn.dataset.dir;
+
+    // Desktop
+    btn.addEventListener("mousedown", ()=> startMove(dir));
+    btn.addEventListener("mouseup", stopMove);
+    btn.addEventListener("mouseleave", stopMove);
+
+    // Mobile
+    btn.addEventListener("touchstart", (e)=>{
+        e.preventDefault();
+        startMove(dir);
+    });
+
+    btn.addEventListener("touchend", stopMove);
+});
 
 document.addEventListener("keydown",e=>{
     if(e.key==="ArrowUp")move("up");
