@@ -15,7 +15,6 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    touch-action: none;
 }
 
 h1 {
@@ -70,6 +69,7 @@ canvas {
     border: 2px solid #00ff99;
     color: white;
     border-radius: 10px;
+    touch-action: manipulation;
 }
 
 #timer {
@@ -266,32 +266,36 @@ function startGame(){
 let moveInterval = null;
 
 function startMove(dir){
-    move(dir); // movimento imediato
+    if(!gameActive) return;
+
+    move(dir);
 
     moveInterval = setInterval(()=>{
         move(dir);
-    },150); // velocidade de repetição
+    },150);
 }
 
 function stopMove(){
     clearInterval(moveInterval);
+    moveInterval = null;
 }
 
 document.querySelectorAll(".controlBtn").forEach(btn => {
     const dir = btn.dataset.dir;
 
-    // Desktop
+    // Mouse
     btn.addEventListener("mousedown", ()=> startMove(dir));
     btn.addEventListener("mouseup", stopMove);
     btn.addEventListener("mouseleave", stopMove);
 
-    // Mobile
+    // Touch
     btn.addEventListener("touchstart", (e)=>{
         e.preventDefault();
         startMove(dir);
-    });
+    }, { passive:false });
 
     btn.addEventListener("touchend", stopMove);
+    btn.addEventListener("touchcancel", stopMove);
 });
 
 document.addEventListener("keydown",e=>{
