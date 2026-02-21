@@ -129,22 +129,32 @@ canvas {
 <div id="message"></div>
 
 <script>
-let canvas = document.getElementById("maze");
-let ctx = canvas.getContext("2d");
+const canvas = document.getElementById("maze");
+const ctx = canvas.getContext("2d");
 
 let cols, rows, size;
-let grid, stack, current;
-let player, exit;
-let pathTrail;
-let startTime;
-let timerInterval;
+let grid = [];
+let stack = [];
+let current;
+
+let player = null;
+let exit = null;
+
+let pathTrail = new Set();
+
+let startTime = 0;
+let timerInterval = null;
+let moveInterval = null;
+
 let gameActive = false;
+
+/* ===================== CELL ===================== */
 
 class Cell {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.walls = [true, true, true, true];
+        this.walls = [true, true, true, true]; // top, right, bottom, left
         this.visited = false;
     }
 
@@ -162,6 +172,8 @@ class Cell {
     }
 }
 
+/* ===================== UTIL ===================== */
+
 function line(x1,y1,x2,y2){
     ctx.beginPath();
     ctx.moveTo(x1,y1);
@@ -174,51 +186,69 @@ function index(x,y){
     return x + y*cols;
 }
 
+/* ===================== PREPARE ===================== */
+
 function prepareGame(){
+
     clearInterval(timerInterval);
+    clearInterval(moveInterval);
+
     document.getElementById("timer").textContent = "0.0";
     document.getElementById("message").textContent = "";
+
     gameActive = false;
 
     cols = rows = parseInt(document.getElementById("difficulty").value);
-
     size = Math.floor(Math.min(window.innerWidth*0.9, window.innerHeight*0.6)/cols);
 
     canvas.width = cols*size;
     canvas.height = rows*size;
 
     grid = [];
+    stack = [];
+    pathTrail.clear();
+
     for(let y=0;y<rows;y++){
         for(let x=0;x<cols;x++){
             grid.push(new Cell(x,y));
         }
     }
 
-    stack = [];
     current = grid[0];
     current.visited = true;
 
     generateMaze();
 }
 
+/* ===================== MAZE GENERATION ===================== */
+
 function generateMaze(){
+
+    draw(); // desenha progresso
+
     let next = getNeighbor(current);
+
     if(next){
         next.visited = true;
         stack.push(current);
         removeWalls(current,next);
         current = next;
-    } else if(stack.length>0){
+    }
+    else if(stack.length>0){
         current = stack.pop();
-    } else{
+    }
+    else{
         startGame();
         return;
     }
+
     requestAnimationFrame(generateMaze);
 }
 
 function getNeighbor(cell){
+
     let neighbors=[];
+
     let t=grid[index(cell.x,cell.y-1)];
     let r=grid[index(cell.x+1,cell.y)];
     let b=grid[index(cell.x,cell.y+1)];
@@ -234,6 +264,7 @@ function getNeighbor(cell){
 }
 
 function removeWalls(a,b){
+
     let dx=a.x-b.x;
     let dy=a.y-b.y;
 
@@ -243,17 +274,20 @@ function removeWalls(a,b){
     if(dy===-1){a.walls[2]=false;b.walls[0]=false;}
 }
 
+/* ===================== GAME START ===================== */
+
 function startGame(){
+
     player = grid[0];
 
     do{
         exit = grid[Math.floor(Math.random()*grid.length)];
     }while(exit === player);
 
-    pathTrail = new Set();
     pathTrail.add(index(player.x,player.y));
 
     startTime = Date.now();
+
     timerInterval = setInterval(()=>{
         let t=((Date.now()-startTime)/1000).toFixed(1);
         document.getElementById("timer").textContent = t;
@@ -263,39 +297,65 @@ function startGame(){
     draw();
 }
 
-let moveInterval = null;
+/* ===================== MOVE ===================== */
 
-function startMove(dir){
+function move(direction){
+
     if(!gameActive) return;
 
-    move(dir);
+    let x = player.x;
+    let y = player.y;
 
-    moveInterval = setInterval(()=>{
-        move(dir);
-    },150);
+    if(direction === "up" && !player.walls[0]) y--;
+    if(direction === "right" && !player.walls[1]) x++;
+    if(direction === "down" && !player.walls[2]) y++;
+    if(direction === "left" && !player.walls[3]) x--;
+
+    let next = grid[index(x,y)];
+
+    if(next){
+        player = next;
+        pathTrail.add(index(player.x,player.y));
+        draw();
+
+        if(player === exit){
+            winGame();
+        }
+    }
+}
+
+function winGame(){
+    gameActive = false;
+    clearInterval(timerInterval);
+    clearInterval(moveInterval);
+    document.getElementById("message").textContent = "🎉 Você venceu!";
+}
+
+/* ===================== CONTROLS ===================== */
+
+function startMove(dir){
+    move(dir);
+    moveInterval = setInterval(()=> move(dir),150);
 }
 
 function stopMove(){
     clearInterval(moveInterval);
-    moveInterval = null;
 }
 
 document.querySelectorAll(".controlBtn").forEach(btn => {
+
     const dir = btn.dataset.dir;
 
-    // Mouse
     btn.addEventListener("mousedown", ()=> startMove(dir));
     btn.addEventListener("mouseup", stopMove);
     btn.addEventListener("mouseleave", stopMove);
 
-    // Touch
     btn.addEventListener("touchstart", (e)=>{
         e.preventDefault();
         startMove(dir);
-    }, { passive:false });
+    });
 
     btn.addEventListener("touchend", stopMove);
-    btn.addEventListener("touchcancel", stopMove);
 });
 
 document.addEventListener("keydown",e=>{
@@ -305,25 +365,37 @@ document.addEventListener("keydown",e=>{
     if(e.key==="ArrowLeft")move("left");
 });
 
+/* ===================== DRAW ===================== */
+
 function draw(){
+
     ctx.fillStyle="black";
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
     grid.forEach(c=>c.draw());
 
-    ctx.fillStyle="rgba(0,0,255,0.3)";
-    pathTrail.forEach(i=>{
-        let c=grid[i];
-        ctx.fillRect(c.x*size,c.y*size,size,size);
-    });
+    // Caminho percorrido
+    if(pathTrail.size>0){
+        ctx.fillStyle="rgba(0,0,255,0.3)";
+        pathTrail.forEach(i=>{
+            let c=grid[i];
+            ctx.fillRect(c.x*size,c.y*size,size,size);
+        });
+    }
 
-    ctx.fillStyle="green";
-    ctx.fillRect(exit.x*size+size/4,exit.y*size+size/4,size/2,size/2);
+    // Saída
+    if(exit){
+        ctx.fillStyle="green";
+        ctx.fillRect(exit.x*size+size/4,exit.y*size+size/4,size/2,size/2);
+    }
 
-    ctx.beginPath();
-    ctx.arc(player.x*size+size/2,player.y*size+size/2,size/4,0,Math.PI*2);
-    ctx.fillStyle="red";
-    ctx.fill();
+    // Jogador
+    if(player){
+        ctx.beginPath();
+        ctx.arc(player.x*size+size/2,player.y*size+size/2,size/4,0,Math.PI*2);
+        ctx.fillStyle="red";
+        ctx.fill();
+    }
 }
 </script>
 
