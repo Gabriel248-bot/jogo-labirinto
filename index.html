@@ -15,6 +15,7 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    touch-action: none;
 }
 
 h1 {
@@ -69,7 +70,6 @@ canvas {
     border: 2px solid #00ff99;
     color: white;
     border-radius: 10px;
-    touch-action: manipulation;
 }
 
 #timer {
@@ -140,7 +140,8 @@ let current;
 let player = null;
 let exit = null;
 
-let pathTrail = new Set();
+//let pathTrail = new Set();
+let pathTrail = [];
 
 let startTime = 0;
 let timerInterval = null;
@@ -206,8 +207,9 @@ function prepareGame(){
 
     grid = [];
     stack = [];
-    pathTrail.clear();
-
+    //pathTrail.clear();
+    pathTrail = [];
+    
     for(let y=0;y<rows;y++){
         for(let x=0;x<cols;x++){
             grid.push(new Cell(x,y));
@@ -224,27 +226,29 @@ function prepareGame(){
 
 function generateMaze(){
 
-    draw(); // desenha progresso
+    while(true){
 
-    let next = getNeighbor(current);
+        let next = getNeighbor(current);
 
-    if(next){
-        next.visited = true;
-        stack.push(current);
-        removeWalls(current,next);
-        current = next;
-    }
-    else if(stack.length>0){
-        current = stack.pop();
-    }
-    else{
-        startGame();
-        return;
+        if(next){
+            next.visited = true;
+            stack.push(current);
+            removeWalls(current,next);
+            current = next;
+        }
+        else if(stack.length > 0){
+            current = stack.pop();
+        }
+        else{
+            break;
+        }
+
     }
 
-    requestAnimationFrame(generateMaze);
+    startGame();
+    draw();
 }
-
+    
 function getNeighbor(cell){
 
     let neighbors=[];
@@ -284,14 +288,26 @@ function startGame(){
         exit = grid[Math.floor(Math.random()*grid.length)];
     }while(exit === player);
 
-    pathTrail.add(index(player.x,player.y));
+    //pathTrail.add(index(player.x,player.y));
+    pathTrail.push(index(player.x,player.y));
 
     startTime = Date.now();
 
-    timerInterval = setInterval(()=>{
-        let t=((Date.now()-startTime)/1000).toFixed(1);
-        document.getElementById("timer").textContent = t;
-    },100);
+        timerInterval = setInterval(()=>{
+
+            let elapsed = Date.now() - startTime;
+
+            let totalSeconds = Math.floor(elapsed / 1000);
+            let minutes = Math.floor(totalSeconds / 60);
+            let seconds = totalSeconds % 60;
+
+            let formattedTime =
+                String(minutes).padStart(2,'0') + ":" +
+                String(seconds).padStart(2,'0');
+
+            document.getElementById("timer").textContent = formattedTime;
+
+        },100);
 
     gameActive = true;
     draw();
@@ -313,9 +329,25 @@ function move(direction){
 
     let next = grid[index(x,y)];
 
-    if(next){
+    // só executa se realmente mudou de célula
+    if(next && next !== player){
+
+        let newIndex = index(next.x, next.y);
+
         player = next;
-        pathTrail.add(index(player.x,player.y));
+
+        if(pathTrail.length > 1){
+            let lastIndex = pathTrail[pathTrail.length - 2];
+
+            if(newIndex === lastIndex){
+                pathTrail.pop();
+            }else{
+                pathTrail.push(newIndex);
+            }
+        }else{
+            pathTrail.push(newIndex);
+        }
+
         draw();
 
         if(player === exit){
@@ -325,21 +357,33 @@ function move(direction){
 }
 
 function winGame(){
+
     gameActive = false;
+
     clearInterval(timerInterval);
     clearInterval(moveInterval);
-    document.getElementById("message").textContent = "🎉 Você venceu!";
-}
 
+    let finalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    document.getElementById("message").textContent =
+        "🎉 Parabéns! Você venceu em " + finalTime + " segundos!";
+}
 /* ===================== CONTROLS ===================== */
 
 function startMove(dir){
+
+    clearInterval(moveInterval); // evita múltiplos intervalos
+
     move(dir);
-    moveInterval = setInterval(()=> move(dir),150);
+
+    moveInterval = setInterval(()=>{
+        move(dir);
+    },150);
 }
 
 function stopMove(){
     clearInterval(moveInterval);
+    moveInterval = null;
 }
 
 document.querySelectorAll(".controlBtn").forEach(btn => {
@@ -359,10 +403,14 @@ document.querySelectorAll(".controlBtn").forEach(btn => {
 });
 
 document.addEventListener("keydown",e=>{
-    if(e.key==="ArrowUp")move("up");
-    if(e.key==="ArrowRight")move("right");
-    if(e.key==="ArrowDown")move("down");
-    if(e.key==="ArrowLeft")move("left");
+
+    const key = e.key.toLowerCase();
+
+    if(key === "w") move("up");
+    if(key === "d") move("right");
+    if(key === "s") move("down");
+    if(key === "a") move("left");
+
 });
 
 /* ===================== DRAW ===================== */
@@ -374,11 +422,10 @@ function draw(){
 
     grid.forEach(c=>c.draw());
 
-    // Caminho percorrido
-    if(pathTrail.size>0){
+    if(pathTrail.length > 0){
         ctx.fillStyle="rgba(0,0,255,0.3)";
         pathTrail.forEach(i=>{
-            let c=grid[i];
+            let c = grid[i];
             ctx.fillRect(c.x*size,c.y*size,size,size);
         });
     }
